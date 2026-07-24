@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giriş Yap — Süt Kutusu Oyunu</title>
+<style>
+  :root{
+    --bg:#0a0a10;
+    --panel:#121218;
+    --panel-2:#16161e;
+    --line:#242430;
+    --text:#e8e8ec;
+    --text-dim:#8a8a97;
+    --text-faint:#5c5c68;
+    --grad-a:#22d3ee;
+    --grad-b:#6d5bf5;
+    --grad-c:#c084fc;
+    --danger:#f0554f;
+    --ok:#84cc16;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+    line-height:1.55;
+    position:relative;
+    overflow-x:hidden;
+  }
+  #stars{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .wrap{max-width:420px;margin:0 auto;padding:56px 20px 90px;position:relative;z-index:1;}
+  .back{
+    font-size:13px; text-decoration:none; color:var(--text-dim);
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .back:hover{color:var(--text);}
+
+  header.hero{margin:34px 0 30px;}
+  h1.grad{
+    font-size:clamp(28px,6vw,38px);
+    font-weight:800;
+    margin:0 0 8px;
+    letter-spacing:.2px;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b) 55%, var(--grad-c));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .eyebrow{
+    margin:0;
+    font-size:12px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+  }
+  .hero-divider{
+    height:1px;
+    margin:26px 0 0;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b), var(--grad-c), transparent);
+    opacity:.5;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+    margin-bottom:18px;
+  }
+  .panel h2{
+    margin:0 0 16px;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    font-weight:700;
+  }
+
+  input[type=text], input[type=email], input[type=password]{
+    width:100%;
+    font-family:inherit;
+    font-size:14px;
+    padding:11px 13px;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:var(--panel-2);
+    color:var(--text);
+  }
+  input::placeholder{color:var(--text-faint);}
+  input:focus{ outline:none; border-color:var(--grad-b); }
+  label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);display:block;margin-bottom:6px;}
+  .field{margin-bottom:14px;}
+
+  button{
+    font-family:inherit;
+    font-weight:600;
+    font-size:13.5px;
+    padding:11px 18px;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    color:#08080c;
+    border:none;
+    border-radius:9px;
+    cursor:pointer;
+    transition:opacity .15s, transform .1s;
+    width:100%;
+  }
+  button:hover{opacity:.88;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.ghost{
+    background:transparent;
+    color:var(--text-dim);
+    border:1px solid var(--line);
+  }
+  button.ghost:hover{color:var(--text); border-color:var(--text-faint); opacity:1;}
+
+  button.google{
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+  }
+  button.google:hover{border-color:var(--grad-b); opacity:1;}
+  button.google svg{flex-shrink:0;}
+
+  .divider{
+    display:flex; align-items:center; gap:12px;
+    margin:18px 0; color:var(--text-faint); font-size:12px;
+    text-transform:uppercase; letter-spacing:.1em;
+  }
+  .divider::before, .divider::after{
+    content:''; flex:1; height:1px; background:var(--line);
+  }
+
+  .mode-switch{
+    display:flex; gap:8px; margin-bottom:18px;
+    border:1px solid var(--line); border-radius:9px; padding:3px;
+    background:var(--panel-2);
+  }
+  .mode-switch button{
+    flex:1; background:transparent; color:var(--text-dim);
+    border-radius:6px; padding:8px; font-size:13px;
+  }
+  .mode-switch button.active{
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    color:#08080c;
+  }
+
+  #msg{
+    font-size:13px; padding:10px 13px; border-radius:9px; margin-bottom:14px;
+    display:none;
+  }
+  #msg.show{display:block;}
+  #msg.error{ background:rgba(240,85,79,.12); border:1px solid rgba(240,85,79,.4); color:#f0a8a4; }
+  #msg.ok{ background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.4); color:#c3e88d; }
+
+  .hidden{display:none !important;}
+  .nick-note{font-size:12px;color:var(--text-faint);margin-top:-6px;margin-bottom:14px;}
+  .signed-in-box{text-align:center;}
+  .signed-in-box .nick-badge{
+    font-weight:700; font-size:16px;
+    background:linear-gradient(90deg, #f43f3f, #f59e0b, #84cc16);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  footer{text-align:center;font-size:12px;color:var(--text-faint);margin-top:44px;}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="wrap">
+  <a class="back" href="https://sutkutusuoyunu.github.io/">← Geri</a>
+
+  <header class="hero">
+    <h1 class="grad">Giriş Yap</h1>
+    <p class="eyebrow">Süt Kutusu Oyunu Forumu</p>
+    <div class="hero-divider"></div>
+  </header>
+
+  <div id="msg"></div>
+
+  <!-- Shown once signed in -->
+  <div class="panel hidden" id="panel-signed-in">
+    <div class="signed-in-box">
+      <p style="margin:0 0 4px;color:var(--text-dim);font-size:13px;">Giriş yapıldı</p>
+      <p class="nick-badge" id="signed-in-name"></p>
+      <div id="nick-setup" class="hidden" style="text-align:left;margin-top:18px;">
+        <div class="field">
+          <label for="nick-input">Forumda görünecek takma ad</label>
+          <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
+        </div>
+        <button id="btn-save-nick">Takma Adı Kaydet ve Devam Et</button>
+      </div>
+      <div id="continue-box" class="hidden" style="margin-top:18px;">
+        <button id="btn-continue">Foruma Dön</button>
+        <div style="margin-top:10px;">
+          <button class="ghost" id="btn-signout">Çıkış Yap</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shown when signed out -->
+  <div id="panel-signed-out">
+    <div class="panel">
+      <button class="google" id="btn-google">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.9v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.9A9 9 0 0 0 0 9c0 1.45.35 2.83.9 4.03l3.05-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .9 4.97l3.05 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+        Google ile Giriş Yap
+      </button>
+    </div>
+
+    <div class="divider">veya e-posta ile</div>
+
+    <div class="panel">
+      <div class="mode-switch">
+        <button class="active" id="mode-login">Giriş Yap</button>
+        <button id="mode-signup">Kayıt Ol</button>
+      </div>
+
+      <div class="field">
+        <label for="email-input">E-posta</label>
+        <input type="email" id="email-input" placeholder="ornek@eposta.com">
+      </div>
+      <div class="field">
+        <label for="password-input">Şifre</label>
+        <input type="password" id="password-input" placeholder="En az 6 karakter">
+      </div>
+      <div class="field hidden" id="signup-nick-field">
+        <label for="signup-nick-input">Takma ad</label>
+        <input type="text" id="signup-nick-input" maxlength="24" placeholder="Forumda görünecek isim">
+      </div>
+
+      <button id="btn-email-submit">Giriş Yap</button>
+      <p class="nick-note" id="forgot-note" style="margin-top:12px;">
+        <button class="small-link" id="btn-forgot" style="background:none;border:none;color:var(--text-faint);text-decoration:underline;cursor:pointer;padding:0;font-size:12px;">Şifreni mi unuttun?</button>
+      </p>
+    </div>
+  </div>
+
+  <footer>Süt Kutusu Oyunu Forumu · veriler Firebase üzerinde tutulur</footer>
+</div>
+
+<script>
+(function(){
+  const c = document.getElementById('stars');
+  const ctx = c.getContext('2d');
+  function resize(){ c.width = innerWidth; c.height = document.body.scrollHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+  const stars = Array.from({length:120}, () => ({
+    x: Math.random()*c.width, y: Math.random()*c.height,
+    r: Math.random()*1.4+0.3, o: Math.random()*0.6+0.2
+  }));
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    for (const s of stars){
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${s.o})`;
+      ctx.fill();
+    }
+  }
+  draw();
+  setInterval(()=>{ resize(); draw(); }, 4000);
+})();
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signOut,
+  GoogleAuthProvider, signInWithPopup,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* =========================================================
+   FIREBASE CONFIG — must match the config used in /forum/
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME.firebaseapp.com",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME.appspot.com",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+
+const FORUM_URL = 'https://sutkutusuoyunu.github.io/forum/';
+
+/* ---------- helpers ---------- */
+function getNextUrl(){
+  const params = new URLSearchParams(location.search);
+  const next = params.get('next');
+  // only allow redirecting back into this same site, never to an arbitrary external host
+  if (next && next.startsWith(location.origin)) return next;
+  return FORUM_URL;
+}
+
+const msgEl = document.getElementById('msg');
+function showMsg(text, kind){
+  msgEl.textContent = text;
+  msgEl.className = 'show ' + (kind || '');
+}
+function clearMsg(){
+  msgEl.className = '';
+  msgEl.textContent = '';
+}
+
+function friendlyError(code){
+  const map = {
+    'auth/invalid-email': 'Geçersiz e-posta adresi.',
+    'auth/user-not-found': 'Bu e-posta ile kayıtlı bir hesap yok.',
+    'auth/wrong-password': 'Şifre yanlış.',
+    'auth/invalid-credential': 'E-posta veya şifre hatalı.',
+    'auth/email-already-in-use': 'Bu e-posta zaten kayıtlı. Giriş yapmayı dene.',
+    'auth/weak-password': 'Şifre en az 6 karakter olmalı.',
+    'auth/popup-closed-by-user': 'Google giriş penceresi kapatıldı.',
+    'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.'
+  };
+  return map[code] || 'Bir şeyler ters gitti. Lütfen tekrar dene.';
+}
+
+async function getNickname(uid){
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return snap.exists() ? snap.data().nickname : null;
+  } catch { return null; }
+}
+async function saveNickname(uid, nickname){
+  await setDoc(doc(db, 'users', uid), { nickname }, { merge: true });
+}
+
+/* ---------- mode switch (login vs signup) ---------- */
+let mode = 'login'; // 'login' | 'signup'
+const modeLoginBtn = document.getElementById('mode-login');
+const modeSignupBtn = document.getElementById('mode-signup');
+const submitBtn = document.getElementById('btn-email-submit');
+const signupNickField = document.getElementById('signup-nick-field');
+const forgotNote = document.getElementById('forgot-note');
+
+function setMode(m){
+  mode = m;
+  modeLoginBtn.classList.toggle('active', m === 'login');
+  modeSignupBtn.classList.toggle('active', m === 'signup');
+  submitBtn.textContent = m === 'login' ? 'Giriş Yap' : 'Hesap Oluştur';
+  signupNickField.classList.toggle('hidden', m !== 'signup');
+  forgotNote.classList.toggle('hidden', m !== 'login');
+  clearMsg();
+}
+modeLoginBtn.onclick = () => setMode('login');
+modeSignupBtn.onclick = () => setMode('signup');
+
+/* ---------- Google sign-in ---------- */
+document.getElementById('btn-google').onclick = async () => {
+  clearMsg();
+  try {
+    await signInWithPopup(auth, googleProvider);
+    // onAuthStateChanged below handles the rest
+  } catch(e){
+    showMsg(friendlyError(e.code), 'error');
+  }
+};
+
+/* ---------- Email/password sign-in or sign-up ---------- */
+submitBtn.onclick = async () => {
+  clearMsg();
+  const email = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('password-input').value;
+  if (!email || !password){
+    showMsg('E-posta ve şifre gerekli.', 'error');
+    return;
+  }
+  submitBtn.disabled = true;
+  try {
+    if (mode === 'signup'){
+      const nickname = document.getElementById('signup-nick-input').value.trim();
+      if (!nickname){
+        showMsg('Lütfen bir takma ad gir.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await saveNickname(cred.user.uid, nickname);
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+    // onAuthStateChanged below handles the rest
+  } catch(e){
+    showMsg(friendlyError(e.code), 'error');
+  } finally {
+    submitBtn.disabled = false;
+  }
+};
+
+document.getElementById('btn-forgot').onclick = async () => {
+  clearMsg();
+  const email = document.getElementById('email-input').value.trim();
+  if (!email){
+    showMsg('Şifre sıfırlamak için önce e-posta adresini yaz.', 'error');
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    showMsg('Şifre sıfırlama bağlantısı e-postana gönderildi.', 'ok');
+  } catch(e){
+    showMsg(friendlyError(e.code), 'error');
+  }
+};
+
+/* ---------- Signed-in view: nickname setup + continue ---------- */
+const panelSignedIn = document.getElementById('panel-signed-in');
+const panelSignedOut = document.getElementById('panel-signed-out');
+const nickSetup = document.getElementById('nick-setup');
+const continueBox = document.getElementById('continue-box');
+
+document.getElementById('btn-save-nick').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  const nickname = document.getElementById('nick-input').value.trim();
+  if (!nickname){ showMsg('Lütfen bir takma ad gir.', 'error'); return; }
+  await saveNickname(user.uid, nickname);
+  document.getElementById('signed-in-name').textContent = nickname;
+  nickSetup.classList.add('hidden');
+  continueBox.classList.remove('hidden');
+};
+
+document.getElementById('btn-continue').onclick = () => {
+  location.href = getNextUrl();
+};
+document.getElementById('btn-signout').onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user){
+    panelSignedIn.classList.add('hidden');
+    panelSignedOut.classList.remove('hidden');
+    return;
+  }
+  clearMsg();
+  panelSignedOut.classList.add('hidden');
+  panelSignedIn.classList.remove('hidden');
+
+  const nickname = await getNickname(user.uid);
+  if (nickname){
+    document.getElementById('signed-in-name').textContent = nickname;
+    nickSetup.classList.add('hidden');
+    continueBox.classList.remove('hidden');
+  } else {
+    // No nickname yet (e.g. first Google sign-in) — ask for one before continuing.
+    document.getElementById('signed-in-name').textContent = user.email;
+    nickSetup.classList.remove('hidden');
+    continueBox.classList.add('hidden');
+  }
+});
+</script>
+</body>
+</html>

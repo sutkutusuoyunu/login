@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Giriş Yap — Süt Kutusu Oyunu</title>
+<title>Giriş Yap Süt Kutusu Oyunu</title>
 <style>
   :root{
     --bg:#0a0a10;
@@ -178,7 +178,7 @@
 
   <header class="hero">
     <h1 class="grad">Giriş Yap</h1>
-    <p class="eyebrow">Süt Kutusu Oyunu Forumu</p>
+    <p class="eyebrow">sutkutusuoyunu.github.io</p>
     <div class="hero-divider"></div>
   </header>
 
@@ -192,7 +192,7 @@
       <div id="nick-setup" class="hidden" style="text-align:left;margin-top:18px;">
         <div class="field">
           <label for="nick-input">Forumda görünecek takma ad</label>
-          <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
+          <input type="text" id="nick-input" maxlength="24" placeholder="">
         </div>
         <button id="btn-save-nick">Takma Adı Kaydet ve Devam Et</button>
       </div>
@@ -242,7 +242,7 @@
     </div>
   </div>
 
-  <footer>Süt Kutusu Oyunu Forumu · veriler Firebase üzerinde tutulur</footer>
+  <footer>Süt Kutusu Oyunu</footer>
 </div>
 
 <script>
@@ -283,15 +283,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* =========================================================
-   FIREBASE CONFIG — must match the config used in /forum/
+   FIREBASE CONFIG — matches forum configuration
    ========================================================= */
 const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME"
+  apiKey: "AIzaSyBafL4x-ANrbA8x9iPjIXvT57d6H0oJnuo",
+  authDomain: "sutkutusuoyunu.firebaseapp.com",
+  projectId: "sutkutusuoyunu",
+  storageBucket: "sutkutusuoyunu.appspot.com",
+  messagingSenderId: "432642434528",
+  appId: "1:432642434528:web:01701181fb552769cef785"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -329,9 +329,11 @@ function friendlyError(code){
     'auth/email-already-in-use': 'Bu e-posta zaten kayıtlı. Giriş yapmayı dene.',
     'auth/weak-password': 'Şifre en az 6 karakter olmalı.',
     'auth/popup-closed-by-user': 'Google giriş penceresi kapatıldı.',
-    'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.'
+    'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.',
+    'auth/operation-not-allowed': 'Bu kimlik doğrulama yöntemi devre dışı bırakıldı.',
+    'auth/network-request-failed': 'Ağ bağlantı hatası. Lütfen tekrar dene.'
   };
-  return map[code] || 'Bir şeyler ters gitti. Lütfen tekrar dene.';
+  return map[code] || 'Bir şeyler ters gitti: ' + code;
 }
 
 async function getNickname(uid){
@@ -371,6 +373,7 @@ document.getElementById('btn-google').onclick = async () => {
     await signInWithPopup(auth, googleProvider);
     // onAuthStateChanged below handles the rest
   } catch(e){
+    console.error('Google sign-in error:', e.code, e.message);
     showMsg(friendlyError(e.code), 'error');
   }
 };
@@ -400,6 +403,7 @@ submitBtn.onclick = async () => {
     }
     // onAuthStateChanged below handles the rest
   } catch(e){
+    console.error('Auth error:', e.code, e.message);
     showMsg(friendlyError(e.code), 'error');
   } finally {
     submitBtn.disabled = false;
@@ -417,6 +421,7 @@ document.getElementById('btn-forgot').onclick = async () => {
     await sendPasswordResetEmail(auth, email);
     showMsg('Şifre sıfırlama bağlantısı e-postana gönderildi.', 'ok');
   } catch(e){
+    console.error('Password reset error:', e.code, e.message);
     showMsg(friendlyError(e.code), 'error');
   }
 };

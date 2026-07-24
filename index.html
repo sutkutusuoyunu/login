@@ -93,6 +93,10 @@
   input:focus{ outline:none; border-color:var(--grad-b); }
   label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);display:block;margin-bottom:6px;}
   .field{margin-bottom:14px;}
+  .field-status{font-size:12px;margin-top:6px;min-height:16px;}
+  .field-status.ok{color:var(--ok);}
+  .field-status.error{color:#f0a8a4;}
+  .field-status.pending{color:var(--text-faint);}
 
   button{
     font-family:inherit;
@@ -189,12 +193,26 @@
     <div class="signed-in-box">
       <p style="margin:0 0 4px;color:var(--text-dim);font-size:13px;">Giriş yapıldı</p>
       <p class="nick-badge" id="signed-in-name"></p>
+
+      <!-- Email verification gate -->
+      <div id="verify-gate" class="hidden" style="text-align:left;margin-top:18px;">
+        <p style="font-size:13px;color:var(--text-dim);">
+          Devam etmeden önce e-postanı doğrulaman gerekiyor. Sana bir doğrulama bağlantısı gönderdik:
+          <strong id="verify-email-addr"></strong>
+        </p>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button id="btn-resend-verify" class="ghost">Tekrar Gönder</button>
+          <button id="btn-check-verify">Doğruladım, Kontrol Et</button>
+        </div>
+      </div>
+
       <div id="nick-setup" class="hidden" style="text-align:left;margin-top:18px;">
         <div class="field">
           <label for="nick-input">Forumda görünecek takma ad</label>
           <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
+          <div class="field-status" id="nick-status"></div>
         </div>
-        <button id="btn-save-nick">Takma Adı Kaydet ve Devam Et</button>
+        <button id="btn-save-nick" disabled>Takma Adı Kaydet ve Devam Et</button>
       </div>
       <div id="continue-box" class="hidden" style="margin-top:18px;">
         <button id="btn-continue">Foruma Dön</button>
@@ -233,6 +251,7 @@
       <div class="field hidden" id="signup-nick-field">
         <label for="signup-nick-input">Takma ad</label>
         <input type="text" id="signup-nick-input" maxlength="24" placeholder="Forumda görünecek isim">
+        <div class="field-status" id="signup-nick-status"></div>
       </div>
 
       <button id="btn-email-submit">Giriş Yap</button>
@@ -276,10 +295,12 @@ import {
   getAuth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, setPersistence, browserSessionPersistence
+  sendPasswordResetEmail, setPersistence, browserSessionPersistence,
+  sendEmailVerification, reload
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc
+  getFirestore, doc, getDoc, setDoc,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ========================================================= 
@@ -294,16 +315,13 @@ const firebaseConfig = {
   appId: "1:432642434528:web:01701181fb552769cef785"
 };
 
-// Initialize Firebase first
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Set persistence BEFORE using auth
 setPersistence(auth, browserSessionPersistence)
   .catch(e => console.warn('Persistence error:', e));
 
-// Only initialize Google provider AFTER auth is ready
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('profile');
 googleProvider.addScope('email');
@@ -346,6 +364,15 @@ function friendlyError(code){
   return map[code] || 'Hata: ' + code;
 }
 
+// ---------- nickname helpers (uniqueness enforced via /nicknames/{lowercased}) ----------
+function normalizeNick(nick){
+  return nick.trim().toLowerCase();
+}
+function validNickFormat(nick){
+  // 3-24 chars, letters/numbers/underscore/space/turkish chars - adjust as you like
+  return /^[a-z0-9_ğüşıöç\s]{3,24}$/i.test(nick);
+}
+
 async function getNickname(uid){
   try {
     const snap = await getDoc(doc(db, 'users', uid));
@@ -356,13 +383,66 @@ async function getNickname(uid){
   }
 }
 
-async function saveNickname(uid, nickname){
-  try {
-    await setDoc(doc(db, 'users', uid), { nickname }, { merge: true });
-  } catch(e) {
-    console.error('saveNickname error:', e);
-    throw e;
+// Atomically reserve a nickname. Throws if taken or invalid.
+// Also releases the user's previous nickname reservation, if any.
+async function claimNickname(uid, rawNick){
+  const nick = rawNick.trim();
+  if (!validNickFormat(nick)) {
+    throw new Error('INVALID_FORMAT');
   }
+  const key = normalizeNick(nick);
+  const nickRef = doc(db, 'nicknames', key);
+  const userRef = doc(db, 'users', uid);
+
+  await runTransaction(db, async (tx) => {
+    const nickSnap = await tx.get(nickRef);
+    if (nickSnap.exists() && nickSnap.data().uid !== uid) {
+      throw new Error('TAKEN');
+    }
+    const userSnap = await tx.get(userRef);
+    const prevNick = userSnap.exists() ? userSnap.data().nickname : null;
+
+    // release old reservation if changing nickname
+    if (prevNick && normalizeNick(prevNick) !== key) {
+      const prevRef = doc(db, 'nicknames', normalizeNick(prevNick));
+      tx.delete(prevRef);
+    }
+
+    tx.set(nickRef, { uid, nickname: nick });
+    tx.set(userRef, { nickname: nick }, { merge: true });
+  });
+}
+
+// live-check as the user types (best-effort, not the source of truth — the
+// transaction above is what actually enforces uniqueness)
+let nickCheckTimer = null;
+function wireNickLiveCheck(inputEl, statusEl, selfUid){
+  inputEl.addEventListener('input', () => {
+    clearTimeout(nickCheckTimer);
+    const val = inputEl.value.trim();
+    if (!val){ statusEl.textContent = ''; statusEl.className = 'field-status'; return; }
+    if (!validNickFormat(val)){
+      statusEl.textContent = '3-24 karakter, harf/rakam/altçizgi.';
+      statusEl.className = 'field-status error';
+      return;
+    }
+    statusEl.textContent = 'Kontrol ediliyor…';
+    statusEl.className = 'field-status pending';
+    nickCheckTimer = setTimeout(async () => {
+      try {
+        const snap = await getDoc(doc(db, 'nicknames', normalizeNick(val)));
+        if (snap.exists() && (!selfUid || snap.data().uid !== selfUid)){
+          statusEl.textContent = 'Bu takma ad zaten alınmış.';
+          statusEl.className = 'field-status error';
+        } else {
+          statusEl.textContent = 'Kullanılabilir ✓';
+          statusEl.className = 'field-status ok';
+        }
+      } catch(e){
+        statusEl.textContent = '';
+      }
+    }, 400);
+  });
 }
 
 // ---------- mode switch (login vs signup) ----------
@@ -371,7 +451,11 @@ const modeLoginBtn = document.getElementById('mode-login');
 const modeSignupBtn = document.getElementById('mode-signup');
 const submitBtn = document.getElementById('btn-email-submit');
 const signupNickField = document.getElementById('signup-nick-field');
+const signupNickInput = document.getElementById('signup-nick-input');
+const signupNickStatus = document.getElementById('signup-nick-status');
 const forgotNote = document.getElementById('forgot-note');
+
+wireNickLiveCheck(signupNickInput, signupNickStatus, null);
 
 function setMode(m){
   mode = m;
@@ -413,15 +497,31 @@ submitBtn.onclick = async () => {
   
   try {
     if (mode === 'signup'){
-      const nickname = document.getElementById('signup-nick-input').value.trim();
+      const nickname = signupNickInput.value.trim();
       if (!nickname){
         showMsg('Lütfen bir takma ad gir.', 'error');
         submitBtn.disabled = false;
         return;
       }
+      if (!validNickFormat(nickname)){
+        showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await saveNickname(cred.user.uid, nickname);
-      console.log('Signup success:', cred.user.email);
+      try {
+        await claimNickname(cred.user.uid, nickname);
+      } catch(nickErr){
+        if (nickErr.message === 'TAKEN'){
+          showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene ve tekrar giriş yap.', 'error');
+        } else {
+          showMsg('Takma ad kaydedilemedi: ' + nickErr.message, 'error');
+        }
+        submitBtn.disabled = false;
+        return;
+      }
+      await sendEmailVerification(cred.user);
+      console.log('Signup success, verification sent:', cred.user.email);
     } else {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       console.log('Login success:', cred.user.email);
@@ -453,24 +553,40 @@ document.getElementById('btn-forgot').onclick = async () => {
 // ---------- Signed-in view ----------
 const panelSignedIn = document.getElementById('panel-signed-in');
 const panelSignedOut = document.getElementById('panel-signed-out');
+const verifyGate = document.getElementById('verify-gate');
 const nickSetup = document.getElementById('nick-setup');
 const continueBox = document.getElementById('continue-box');
+const nickInput = document.getElementById('nick-input');
+const nickStatus = document.getElementById('nick-status');
+const btnSaveNick = document.getElementById('btn-save-nick');
 
-document.getElementById('btn-save-nick').onclick = async () => {
+wireNickLiveCheck(nickInput, nickStatus, null);
+nickInput.addEventListener('input', () => {
+  // only enable save when the live check says it's fine
+  btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()));
+});
+
+btnSaveNick.onclick = async () => {
   const user = auth.currentUser;
   if (!user) return;
-  const nickname = document.getElementById('nick-input').value.trim();
+  const nickname = nickInput.value.trim();
   if (!nickname){ 
     showMsg('Lütfen bir takma ad gir.', 'error'); 
     return; 
   }
+  btnSaveNick.disabled = true;
   try {
-    await saveNickname(user.uid, nickname);
+    await claimNickname(user.uid, nickname);
     document.getElementById('signed-in-name').textContent = nickname;
     nickSetup.classList.add('hidden');
     continueBox.classList.remove('hidden');
   } catch(e) {
-    showMsg('Takma ad kaydedilemedi: ' + e.message, 'error');
+    if (e.message === 'TAKEN'){
+      showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene.', 'error');
+    } else {
+      showMsg('Takma ad kaydedilemedi: ' + e.message, 'error');
+    }
+    btnSaveNick.disabled = false;
   }
 };
 
@@ -486,6 +602,72 @@ document.getElementById('btn-signout').onclick = async () => {
   }
 };
 
+document.getElementById('btn-resend-verify').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await sendEmailVerification(user);
+    showMsg('Doğrulama bağlantısı tekrar gönderildi.', 'ok');
+  } catch(e){
+    showMsg(friendlyError(e.code) || e.message, 'error');
+  }
+};
+
+document.getElementById('btn-check-verify').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await reload(user);
+    if (user.emailVerified){
+      clearMsg();
+      await enterSignedInFlow(user);
+    } else {
+      showMsg('Henüz doğrulanmamış görünüyor. E-postandaki bağlantıya tıklayıp tekrar dene.', 'error');
+    }
+  } catch(e){
+    showMsg(friendlyError(e.code) || e.message, 'error');
+  }
+};
+
+// ---------- shared signed-in routing ----------
+async function enterSignedInFlow(user){
+  panelSignedOut.classList.add('hidden');
+  panelSignedIn.classList.remove('hidden');
+
+  // Email/password accounts must verify their email before continuing.
+  // Google accounts come pre-verified.
+  if (!user.emailVerified){
+    document.getElementById('signed-in-name').textContent = user.email;
+    document.getElementById('verify-email-addr').textContent = user.email;
+    verifyGate.classList.remove('hidden');
+    nickSetup.classList.add('hidden');
+    continueBox.classList.add('hidden');
+    return;
+  }
+  verifyGate.classList.add('hidden');
+
+  try {
+    const nickname = await getNickname(user.uid);
+    if (nickname){
+      document.getElementById('signed-in-name').textContent = nickname;
+      nickSetup.classList.add('hidden');
+      continueBox.classList.remove('hidden');
+    } else {
+      document.getElementById('signed-in-name').textContent = user.email;
+      nickInput.value = '';
+      nickStatus.textContent = '';
+      btnSaveNick.disabled = true;
+      nickSetup.classList.remove('hidden');
+      continueBox.classList.add('hidden');
+    }
+  } catch(e) {
+    console.error('Error loading user data:', e);
+    document.getElementById('signed-in-name').textContent = user.email;
+    nickSetup.classList.remove('hidden');
+    continueBox.classList.add('hidden');
+  }
+}
+
 // Monitor auth state
 onAuthStateChanged(auth, async (user) => {
   console.log('Auth state changed:', user ? user.email : 'logged out');
@@ -497,26 +679,7 @@ onAuthStateChanged(auth, async (user) => {
   }
   
   clearMsg();
-  panelSignedOut.classList.add('hidden');
-  panelSignedIn.classList.remove('hidden');
-
-  try {
-    const nickname = await getNickname(user.uid);
-    if (nickname){
-      document.getElementById('signed-in-name').textContent = nickname;
-      nickSetup.classList.add('hidden');
-      continueBox.classList.remove('hidden');
-    } else {
-      document.getElementById('signed-in-name').textContent = user.email;
-      nickSetup.classList.remove('hidden');
-      continueBox.classList.add('hidden');
-    }
-  } catch(e) {
-    console.error('Error loading user data:', e);
-    document.getElementById('signed-in-name').textContent = user.email;
-    nickSetup.classList.remove('hidden');
-    continueBox.classList.add('hidden');
-  }
+  await enterSignedInFlow(user);
 });
 
 console.log('Login page loaded. Firebase configured for project:', firebaseConfig.projectId);

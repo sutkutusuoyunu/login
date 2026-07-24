@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Giriş Yap Süt Kutusu Oyunu</title>
+<title>Giriş Yap — Süt Kutusu Oyunu</title>
 <style>
   :root{
     --bg:#0a0a10;
@@ -178,7 +178,7 @@
 
   <header class="hero">
     <h1 class="grad">Giriş Yap</h1>
-    <p class="eyebrow">sutkutusuoyunu.github.io</p>
+    <p class="eyebrow">Süt Kutusu Oyunu Forumu</p>
     <div class="hero-divider"></div>
   </header>
 
@@ -192,7 +192,7 @@
       <div id="nick-setup" class="hidden" style="text-align:left;margin-top:18px;">
         <div class="field">
           <label for="nick-input">Forumda görünecek takma ad</label>
-          <input type="text" id="nick-input" maxlength="24" placeholder="">
+          <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
         </div>
         <button id="btn-save-nick">Takma Adı Kaydet ve Devam Et</button>
       </div>
@@ -242,7 +242,7 @@
     </div>
   </div>
 
-  <footer>Süt Kutusu Oyunu</footer>
+  <footer>Süt Kutusu Oyunu Forumu · veriler Firebase üzerinde tutulur</footer>
 </div>
 
 <script>
@@ -276,15 +276,15 @@ import {
   getAuth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail, setPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-/* =========================================================
-   FIREBASE CONFIG — matches forum configuration
-   ========================================================= */
+// ========================================================= 
+// FIREBASE CONFIG
+// ========================================================= 
 const firebaseConfig = {
   apiKey: "AIzaSyBafL4x-ANrbA8x9iPjIXvT57d6H0oJnuo",
   authDomain: "sutkutusuoyunu.firebaseapp.com",
@@ -294,18 +294,26 @@ const firebaseConfig = {
   appId: "1:432642434528:web:01701181fb552769cef785"
 };
 
+// Initialize Firebase first
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Set persistence BEFORE using auth
+setPersistence(auth, browserSessionPersistence)
+  .catch(e => console.warn('Persistence error:', e));
+
+// Only initialize Google provider AFTER auth is ready
 const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('profile');
+googleProvider.addScope('email');
 
 const FORUM_URL = 'https://sutkutusuoyunu.github.io/forum/';
 
-/* ---------- helpers ---------- */
+// ---------- helpers ----------
 function getNextUrl(){
   const params = new URLSearchParams(location.search);
   const next = params.get('next');
-  // only allow redirecting back into this same site, never to an arbitrary external host
   if (next && next.startsWith(location.origin)) return next;
   return FORUM_URL;
 }
@@ -330,24 +338,35 @@ function friendlyError(code){
     'auth/weak-password': 'Şifre en az 6 karakter olmalı.',
     'auth/popup-closed-by-user': 'Google giriş penceresi kapatıldı.',
     'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.',
-    'auth/operation-not-allowed': 'Bu kimlik doğrulama yöntemi devre dışı bırakıldı.',
-    'auth/network-request-failed': 'Ağ bağlantı hatası. Lütfen tekrar dene.'
+    'auth/operation-not-allowed': 'Bu kimlik doğrulama yöntemi Firebase\'de aktif değil. Admin panelinden etkinleştir.',
+    'auth/network-request-failed': 'Ağ bağlantı hatası. Lütfen tekrar dene.',
+    'auth/configuration-not-found': 'Firebase yapılandırması bulunamadı. Sayfayı yenile.',
+    'auth/unauthorized-domain': 'Bu alan adı Firebase\'de yetkilendirilmemiş.'
   };
-  return map[code] || 'Bir şeyler ters gitti: ' + code;
+  return map[code] || 'Hata: ' + code;
 }
 
 async function getNickname(uid){
   try {
     const snap = await getDoc(doc(db, 'users', uid));
     return snap.exists() ? snap.data().nickname : null;
-  } catch { return null; }
-}
-async function saveNickname(uid, nickname){
-  await setDoc(doc(db, 'users', uid), { nickname }, { merge: true });
+  } catch(e) { 
+    console.warn('getNickname error:', e);
+    return null; 
+  }
 }
 
-/* ---------- mode switch (login vs signup) ---------- */
-let mode = 'login'; // 'login' | 'signup'
+async function saveNickname(uid, nickname){
+  try {
+    await setDoc(doc(db, 'users', uid), { nickname }, { merge: true });
+  } catch(e) {
+    console.error('saveNickname error:', e);
+    throw e;
+  }
+}
+
+// ---------- mode switch (login vs signup) ----------
+let mode = 'login';
 const modeLoginBtn = document.getElementById('mode-login');
 const modeSignupBtn = document.getElementById('mode-signup');
 const submitBtn = document.getElementById('btn-email-submit');
@@ -366,28 +385,32 @@ function setMode(m){
 modeLoginBtn.onclick = () => setMode('login');
 modeSignupBtn.onclick = () => setMode('signup');
 
-/* ---------- Google sign-in ---------- */
+// ---------- Google sign-in ----------
 document.getElementById('btn-google').onclick = async () => {
   clearMsg();
   try {
-    await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged below handles the rest
+    const result = await signInWithPopup(auth, googleProvider);
+    console.log('Google sign-in success:', result.user.email);
+    // onAuthStateChanged handles the rest
   } catch(e){
     console.error('Google sign-in error:', e.code, e.message);
     showMsg(friendlyError(e.code), 'error');
   }
 };
 
-/* ---------- Email/password sign-in or sign-up ---------- */
+// ---------- Email/password sign-in or sign-up ----------
 submitBtn.onclick = async () => {
   clearMsg();
   const email = document.getElementById('email-input').value.trim();
   const password = document.getElementById('password-input').value;
+  
   if (!email || !password){
     showMsg('E-posta ve şifre gerekli.', 'error');
     return;
   }
+  
   submitBtn.disabled = true;
+  
   try {
     if (mode === 'signup'){
       const nickname = document.getElementById('signup-nick-input').value.trim();
@@ -398,10 +421,11 @@ submitBtn.onclick = async () => {
       }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await saveNickname(cred.user.uid, nickname);
+      console.log('Signup success:', cred.user.email);
     } else {
-      await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login success:', cred.user.email);
     }
-    // onAuthStateChanged below handles the rest
   } catch(e){
     console.error('Auth error:', e.code, e.message);
     showMsg(friendlyError(e.code), 'error');
@@ -426,7 +450,7 @@ document.getElementById('btn-forgot').onclick = async () => {
   }
 };
 
-/* ---------- Signed-in view: nickname setup + continue ---------- */
+// ---------- Signed-in view ----------
 const panelSignedIn = document.getElementById('panel-signed-in');
 const panelSignedOut = document.getElementById('panel-signed-out');
 const nickSetup = document.getElementById('nick-setup');
@@ -436,40 +460,66 @@ document.getElementById('btn-save-nick').onclick = async () => {
   const user = auth.currentUser;
   if (!user) return;
   const nickname = document.getElementById('nick-input').value.trim();
-  if (!nickname){ showMsg('Lütfen bir takma ad gir.', 'error'); return; }
-  await saveNickname(user.uid, nickname);
-  document.getElementById('signed-in-name').textContent = nickname;
-  nickSetup.classList.add('hidden');
-  continueBox.classList.remove('hidden');
+  if (!nickname){ 
+    showMsg('Lütfen bir takma ad gir.', 'error'); 
+    return; 
+  }
+  try {
+    await saveNickname(user.uid, nickname);
+    document.getElementById('signed-in-name').textContent = nickname;
+    nickSetup.classList.add('hidden');
+    continueBox.classList.remove('hidden');
+  } catch(e) {
+    showMsg('Takma ad kaydedilemedi: ' + e.message, 'error');
+  }
 };
 
 document.getElementById('btn-continue').onclick = () => {
   location.href = getNextUrl();
 };
-document.getElementById('btn-signout').onclick = () => signOut(auth);
 
+document.getElementById('btn-signout').onclick = async () => {
+  try {
+    await signOut(auth);
+  } catch(e) {
+    console.error('Signout error:', e);
+  }
+};
+
+// Monitor auth state
 onAuthStateChanged(auth, async (user) => {
+  console.log('Auth state changed:', user ? user.email : 'logged out');
+  
   if (!user){
     panelSignedIn.classList.add('hidden');
     panelSignedOut.classList.remove('hidden');
     return;
   }
+  
   clearMsg();
   panelSignedOut.classList.add('hidden');
   panelSignedIn.classList.remove('hidden');
 
-  const nickname = await getNickname(user.uid);
-  if (nickname){
-    document.getElementById('signed-in-name').textContent = nickname;
-    nickSetup.classList.add('hidden');
-    continueBox.classList.remove('hidden');
-  } else {
-    // No nickname yet (e.g. first Google sign-in) — ask for one before continuing.
+  try {
+    const nickname = await getNickname(user.uid);
+    if (nickname){
+      document.getElementById('signed-in-name').textContent = nickname;
+      nickSetup.classList.add('hidden');
+      continueBox.classList.remove('hidden');
+    } else {
+      document.getElementById('signed-in-name').textContent = user.email;
+      nickSetup.classList.remove('hidden');
+      continueBox.classList.add('hidden');
+    }
+  } catch(e) {
+    console.error('Error loading user data:', e);
     document.getElementById('signed-in-name').textContent = user.email;
     nickSetup.classList.remove('hidden');
     continueBox.classList.add('hidden');
   }
 });
+
+console.log('Login page loaded. Firebase configured for project:', firebaseConfig.projectId);
 </script>
 </body>
 </html>

@@ -414,35 +414,49 @@ async function claimNickname(uid, rawNick){
 }
 
 // live-check as the user types (best-effort, not the source of truth — the
-// transaction above is what actually enforces uniqueness)
+// transaction below is what actually enforces uniqueness).
+// Returns a state object so callers can read the latest known availability.
 let nickCheckTimer = null;
-function wireNickLiveCheck(inputEl, statusEl, selfUid){
+function wireNickLiveCheck(inputEl, statusEl, selfUid, onStateChange){
+  const state = { available: false, checking: false };
   inputEl.addEventListener('input', () => {
     clearTimeout(nickCheckTimer);
     const val = inputEl.value.trim();
-    if (!val){ statusEl.textContent = ''; statusEl.className = 'field-status'; return; }
+    state.available = false;
+    if (!val){ statusEl.textContent = ''; statusEl.className = 'field-status'; onStateChange && onStateChange(state); return; }
     if (!validNickFormat(val)){
       statusEl.textContent = '3-24 karakter, harf/rakam/altçizgi.';
       statusEl.className = 'field-status error';
+      onStateChange && onStateChange(state);
       return;
     }
     statusEl.textContent = 'Kontrol ediliyor…';
     statusEl.className = 'field-status pending';
+    state.checking = true;
+    onStateChange && onStateChange(state);
     nickCheckTimer = setTimeout(async () => {
       try {
         const snap = await getDoc(doc(db, 'nicknames', normalizeNick(val)));
-        if (snap.exists() && (!selfUid || snap.data().uid !== selfUid)){
+        const taken = snap.exists() && (!selfUid || snap.data().uid !== selfUid);
+        state.checking = false;
+        if (taken){
+          state.available = false;
           statusEl.textContent = 'Bu takma ad zaten alınmış.';
           statusEl.className = 'field-status error';
         } else {
+          state.available = true;
           statusEl.textContent = 'Kullanılabilir ✓';
           statusEl.className = 'field-status ok';
         }
       } catch(e){
+        state.checking = false;
+        state.available = false;
         statusEl.textContent = '';
       }
+      onStateChange && onStateChange(state);
     }, 400);
   });
+  return state;
 }
 
 // ---------- mode switch (login vs signup) ----------
@@ -455,7 +469,7 @@ const signupNickInput = document.getElementById('signup-nick-input');
 const signupNickStatus = document.getElementById('signup-nick-status');
 const forgotNote = document.getElementById('forgot-note');
 
-wireNickLiveCheck(signupNickInput, signupNickStatus, null);
+const signupNickState = wireNickLiveCheck(signupNickInput, signupNickStatus, null);
 
 function setMode(m){
   mode = m;
@@ -505,6 +519,16 @@ submitBtn.onclick = async () => {
       }
       if (!validNickFormat(nickname)){
         showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (signupNickState.checking){
+        showMsg('Takma ad kontrol ediliyor, birkaç saniye bekle ve tekrar dene.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (!signupNickState.available){
+        showMsg('Bu takma ad zaten alınmış olabilir. Farklı bir tane dene.', 'error');
         submitBtn.disabled = false;
         return;
       }
@@ -560,10 +584,13 @@ const nickInput = document.getElementById('nick-input');
 const nickStatus = document.getElementById('nick-status');
 const btnSaveNick = document.getElementById('btn-save-nick');
 
-wireNickLiveCheck(nickInput, nickStatus, null);
+const nickState = wireNickLiveCheck(nickInput, nickStatus, null, (state) => {
+  btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()) && state.available && !state.checking);
+});
 nickInput.addEventListener('input', () => {
-  // only enable save when the live check says it's fine
-  btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()));
+  // disable immediately while re-checking; wireNickLiveCheck's callback
+  // will re-enable once the availability check for the new value resolves
+  btnSaveNick.disabled = true;
 });
 
 btnSaveNick.onclick = async () => {
@@ -573,6 +600,10 @@ btnSaveNick.onclick = async () => {
   if (!nickname){ 
     showMsg('Lütfen bir takma ad gir.', 'error'); 
     return; 
+  }
+  if (!validNickFormat(nickname)){
+    showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
+    return;
   }
   btnSaveNick.disabled = true;
   try {

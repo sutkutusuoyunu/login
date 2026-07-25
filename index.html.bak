@@ -328,70 +328,6 @@ googleProvider.addScope('email');
 
 const FORUM_URL = 'https://sutkutusuoyunu.github.io/documentation/';
 
-// ---------- reserved nickname protection (support account) ----------
-// The exact string "artful617" is enforced server-side too (see
-// firestore.rules — nicknames/artful617 can only ever be created/updated
-// by artful617@gmail.com). Everything here is a client-side courtesy layer
-// that also catches common lookalikes/impersonation attempts BEFORE they
-// even reach Firestore, so people get a clear "reserved" message instead
-// of a generic permission error, and so near-miss impostor names
-// (e.g. "artfu1617", "art_ful617") are blocked too — those aren't covered
-// by the server rule since it only matches the exact doc ID.
-const RESERVED_SUPPORT_EMAIL = 'artful617@gmail.com';
-const RESERVED_NICK_CANONICAL = 'artful617';
-
-// Collapse common lookalike substitutions so visually-similar strings
-// normalize to the same value before comparing/measuring distance.
-function foldLookalikes(s){
-  return s
-    .toLowerCase()
-    .replace(/[0]/g, 'o')
-    .replace(/[1lI!|]/g, 'i')
-    .replace(/[3]/g, 'e')
-    .replace(/[4]/g, 'a')
-    .replace(/[5$]/g, 's')
-    .replace(/[7]/g, 't')
-    .replace(/[@]/g, 'a')
-    .replace(/[_\-.\s]/g, ''); // strip separators entirely
-}
-
-// Small Levenshtein distance implementation, no dependency needed.
-function levenshtein(a, b){
-  const m = a.length, n = b.length;
-  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
-  for (let i=0;i<=m;i++) dp[i][0] = i;
-  for (let j=0;j<=n;j++) dp[0][j] = j;
-  for (let i=1;i<=m;i++){
-    for (let j=1;j<=n;j++){
-      const cost = a[i-1] === b[j-1] ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i-1][j] + 1,
-        dp[i][j-1] + 1,
-        dp[i-1][j-1] + cost
-      );
-    }
-  }
-  return dp[m][n];
-}
-
-// Returns true if `nick` is the reserved name or a close lookalike of it.
-function isReservedNickAttempt(rawNick){
-  const folded = foldLookalikes(rawNick.trim());
-  const canonicalFolded = foldLookalikes(RESERVED_NICK_CANONICAL);
-  if (folded === canonicalFolded) return true;
-  // catch small edits around the folded form (extra/missing/swapped char)
-  // canonical folded length is short, so distance <=1 is a tight, safe bound
-  if (Math.abs(folded.length - canonicalFolded.length) <= 2 &&
-      levenshtein(folded, canonicalFolded) <= 1){
-    return true;
-  }
-  return false;
-}
-
-function isSupportAccount(user){
-  return !!user && user.email === RESERVED_SUPPORT_EMAIL;
-}
-
 // ---------- helpers ----------
 function getNextUrl(){
   const params = new URLSearchParams(location.search);
@@ -447,17 +383,12 @@ async function getNickname(uid){
   }
 }
 
-// Atomically reserve a nickname. Throws if taken, reserved, or invalid.
+// Atomically reserve a nickname. Throws if taken or invalid.
 // Also releases the user's previous nickname reservation, if any.
-async function claimNickname(uid, rawNick, userEmail){
+async function claimNickname(uid, rawNick){
   const nick = rawNick.trim();
   if (!validNickFormat(nick)) {
     throw new Error('INVALID_FORMAT');
-  }
-  // block the reserved support name / lookalikes for everyone except
-  // the actual support account
-  if (isReservedNickAttempt(nick) && userEmail !== RESERVED_SUPPORT_EMAIL){
-    throw new Error('RESERVED');
   }
   const key = normalizeNick(nick);
   const nickRef = doc(db, 'nicknames', key);
@@ -486,7 +417,7 @@ async function claimNickname(uid, rawNick, userEmail){
 // transaction below is what actually enforces uniqueness).
 // Returns a state object so callers can read the latest known availability.
 let nickCheckTimer = null;
-function wireNickLiveCheck(inputEl, statusEl, selfUid, onStateChange, getUserEmail){
+function wireNickLiveCheck(inputEl, statusEl, selfUid, onStateChange){
   const state = { available: false, checking: false };
   inputEl.addEventListener('input', () => {
     clearTimeout(nickCheckTimer);
@@ -495,13 +426,6 @@ function wireNickLiveCheck(inputEl, statusEl, selfUid, onStateChange, getUserEma
     if (!val){ statusEl.textContent = ''; statusEl.className = 'field-status'; onStateChange && onStateChange(state); return; }
     if (!validNickFormat(val)){
       statusEl.textContent = '3-24 karakter, harf/rakam/altçizgi.';
-      statusEl.className = 'field-status error';
-      onStateChange && onStateChange(state);
-      return;
-    }
-    const userEmail = getUserEmail ? getUserEmail() : null;
-    if (isReservedNickAttempt(val) && userEmail !== RESERVED_SUPPORT_EMAIL){
-      statusEl.textContent = 'Bu isim rezerve edilmiş.';
       statusEl.className = 'field-status error';
       onStateChange && onStateChange(state);
       return;
@@ -545,9 +469,7 @@ const signupNickInput = document.getElementById('signup-nick-input');
 const signupNickStatus = document.getElementById('signup-nick-status');
 const forgotNote = document.getElementById('forgot-note');
 
-// at signup time there's no user yet, so the reserved-name exemption never
-// applies here — nobody can sign up claiming to already be support
-const signupNickState = wireNickLiveCheck(signupNickInput, signupNickStatus, null, null, () => null);
+const signupNickState = wireNickLiveCheck(signupNickInput, signupNickStatus, null);
 
 function setMode(m){
   mode = m;
@@ -600,12 +522,6 @@ submitBtn.onclick = async () => {
         submitBtn.disabled = false;
         return;
       }
-      // nobody can sign up claiming the reserved name / a lookalike of it
-      if (isReservedNickAttempt(nickname)){
-        showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
-        submitBtn.disabled = false;
-        return;
-      }
       if (signupNickState.checking){
         showMsg('Takma ad kontrol ediliyor, birkaç saniye bekle ve tekrar dene.', 'error');
         submitBtn.disabled = false;
@@ -618,12 +534,10 @@ submitBtn.onclick = async () => {
       }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       try {
-        await claimNickname(cred.user.uid, nickname, cred.user.email);
+        await claimNickname(cred.user.uid, nickname);
       } catch(nickErr){
         if (nickErr.message === 'TAKEN'){
           showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene ve tekrar giriş yap.', 'error');
-        } else if (nickErr.message === 'RESERVED'){
-          showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
         } else {
           showMsg('Takma ad kaydedilemedi: ' + nickErr.message, 'error');
         }
@@ -670,13 +584,9 @@ const nickInput = document.getElementById('nick-input');
 const nickStatus = document.getElementById('nick-status');
 const btnSaveNick = document.getElementById('btn-save-nick');
 
-const nickState = wireNickLiveCheck(
-  nickInput, nickStatus, null,
-  (state) => {
-    btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()) && state.available && !state.checking);
-  },
-  () => (auth.currentUser ? auth.currentUser.email : null)
-);
+const nickState = wireNickLiveCheck(nickInput, nickStatus, null, (state) => {
+  btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()) && state.available && !state.checking);
+});
 nickInput.addEventListener('input', () => {
   // disable immediately while re-checking; wireNickLiveCheck's callback
   // will re-enable once the availability check for the new value resolves
@@ -695,21 +605,15 @@ btnSaveNick.onclick = async () => {
     showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
     return;
   }
-  if (isReservedNickAttempt(nickname) && !isSupportAccount(user)){
-    showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
-    return;
-  }
   btnSaveNick.disabled = true;
   try {
-    await claimNickname(user.uid, nickname, user.email);
+    await claimNickname(user.uid, nickname);
     document.getElementById('signed-in-name').textContent = nickname;
     nickSetup.classList.add('hidden');
     continueBox.classList.remove('hidden');
   } catch(e) {
     if (e.message === 'TAKEN'){
       showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene.', 'error');
-    } else if (e.message === 'RESERVED'){
-      showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
     } else {
       showMsg('Takma ad kaydedilemedi: ' + e.message, 'error');
     }

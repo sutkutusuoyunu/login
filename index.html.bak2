@@ -165,20 +165,6 @@
   #msg.ok{ background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.4); color:#c3e88d; }
 
   .hidden{display:none !important;}
-  .avatar-preview{
-    display:block;
-    width:72px; height:72px;
-    border-radius:50%;
-    object-fit:cover;
-    border:1px solid var(--line);
-    margin-bottom:10px;
-    background:var(--panel-2);
-  }
-  input[type=file]{
-    width:100%;
-    font-size:12px;
-    color:var(--text-dim);
-  }
   .nick-note{font-size:12px;color:var(--text-faint);margin-top:-6px;margin-bottom:14px;}
   .signed-in-box{text-align:center;}
   .signed-in-box .nick-badge{
@@ -226,21 +212,9 @@
           <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
           <div class="field-status" id="nick-status"></div>
         </div>
-        <div class="field">
-          <label for="avatar-input-setup">Profil fotoğrafı (opsiyonel)</label>
-          <img id="avatar-preview-setup" class="avatar-preview hidden" alt="">
-          <input type="file" id="avatar-input-setup" accept="image/*">
-          <div class="field-status" id="avatar-status-setup"></div>
-        </div>
         <button id="btn-save-nick" disabled>Takma Adı Kaydet ve Devam Et</button>
       </div>
       <div id="continue-box" class="hidden" style="margin-top:18px;">
-        <div class="field" style="text-align:left;">
-          <label for="avatar-input-edit">Profil fotoğrafı</label>
-          <img id="avatar-preview-edit" class="avatar-preview hidden" alt="">
-          <input type="file" id="avatar-input-edit" accept="image/*">
-          <div class="field-status" id="avatar-status-edit"></div>
-        </div>
         <button id="btn-continue">Foruma Dön</button>
         <div style="margin-top:10px;">
           <button class="ghost" id="btn-signout">Çıkış Yap</button>
@@ -328,9 +302,6 @@ import {
   getFirestore, doc, getDoc, setDoc,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getStorage, ref, uploadBytes, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ========================================================= 
 // FIREBASE CONFIG
@@ -347,85 +318,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
-
-// ---------- avatar upload (2KB - 2MB, enforced client-side AND in
-// storage.rules — the client check is just for fast, friendly feedback;
-// the rule is what actually protects it) ----------
-const AVATAR_MIN_BYTES = 2 * 1024;
-const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
-
-function formatBytes(n){
-  if (n < 1024) return n + ' B';
-  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
-  return (n/(1024*1024)).toFixed(2) + ' MB';
-}
-
-// Wires a <input type=file> + status element + optional <img> preview.
-// Returns a function that uploads the currently-selected file (if valid)
-// and resolves to the uploaded download URL, or null if nothing selected.
-function wireAvatarInput(inputEl, statusEl, previewEl, getUid){
-  let selectedFile = null;
-
-  inputEl.addEventListener('change', () => {
-    selectedFile = null;
-    if (previewEl) previewEl.classList.add('hidden');
-    statusEl.textContent = '';
-    statusEl.className = 'field-status';
-
-    const file = inputEl.files && inputEl.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')){
-      statusEl.textContent = 'Sadece resim dosyaları kabul edilir.';
-      statusEl.className = 'field-status error';
-      inputEl.value = '';
-      return;
-    }
-    if (file.size < AVATAR_MIN_BYTES){
-      statusEl.textContent = `Dosya çok küçük (${formatBytes(file.size)}). En az 2 KB olmalı.`;
-      statusEl.className = 'field-status error';
-      inputEl.value = '';
-      return;
-    }
-    if (file.size > AVATAR_MAX_BYTES){
-      statusEl.textContent = `Dosya çok büyük (${formatBytes(file.size)}). En fazla 2 MB olmalı.`;
-      statusEl.className = 'field-status error';
-      inputEl.value = '';
-      return;
-    }
-
-    selectedFile = file;
-    statusEl.textContent = `Seçildi: ${formatBytes(file.size)} ✓`;
-    statusEl.className = 'field-status ok';
-    if (previewEl){
-      previewEl.src = URL.createObjectURL(file);
-      previewEl.classList.remove('hidden');
-    }
-  });
-
-  return async function uploadIfSelected(){
-    if (!selectedFile) return null;
-    const uid = getUid();
-    if (!uid) return null;
-    statusEl.textContent = 'Yükleniyor…';
-    statusEl.className = 'field-status pending';
-    try {
-      const avatarRef = ref(storage, `avatars/${uid}`);
-      await uploadBytes(avatarRef, selectedFile, { contentType: selectedFile.type });
-      const url = await getDownloadURL(avatarRef);
-      statusEl.textContent = 'Yüklendi ✓';
-      statusEl.className = 'field-status ok';
-      selectedFile = null; // don't re-upload on next call
-      return url;
-    } catch(e){
-      console.error('Avatar upload error:', e);
-      statusEl.textContent = 'Fotoğraf yüklenemedi: ' + e.message;
-      statusEl.className = 'field-status error';
-      throw e;
-    }
-  };
-}
 
 setPersistence(auth, browserSessionPersistence)
   .catch(e => console.warn('Persistence error:', e));
@@ -778,19 +670,6 @@ const nickInput = document.getElementById('nick-input');
 const nickStatus = document.getElementById('nick-status');
 const btnSaveNick = document.getElementById('btn-save-nick');
 
-const uploadSetupAvatar = wireAvatarInput(
-  document.getElementById('avatar-input-setup'),
-  document.getElementById('avatar-status-setup'),
-  document.getElementById('avatar-preview-setup'),
-  () => (auth.currentUser ? auth.currentUser.uid : null)
-);
-const uploadEditAvatar = wireAvatarInput(
-  document.getElementById('avatar-input-edit'),
-  document.getElementById('avatar-status-edit'),
-  document.getElementById('avatar-preview-edit'),
-  () => (auth.currentUser ? auth.currentUser.uid : null)
-);
-
 const nickState = wireNickLiveCheck(
   nickInput, nickStatus, null,
   (state) => {
@@ -823,21 +702,9 @@ btnSaveNick.onclick = async () => {
   btnSaveNick.disabled = true;
   try {
     await claimNickname(user.uid, nickname, user.email);
-    try {
-      const photoURL = await uploadSetupAvatar();
-      if (photoURL){
-        await setDoc(doc(db, 'users', user.uid), { photoURL }, { merge: true });
-      }
-    } catch(avatarErr){
-      // nickname already saved successfully; don't block continuing just
-      // because the optional avatar upload failed — the status text next
-      // to the file input already explains what went wrong
-      console.warn('Avatar upload failed during setup:', avatarErr);
-    }
     document.getElementById('signed-in-name').textContent = nickname;
     nickSetup.classList.add('hidden');
     continueBox.classList.remove('hidden');
-    await loadAvatarPreview(user.uid, document.getElementById('avatar-preview-edit'));
   } catch(e) {
     if (e.message === 'TAKEN'){
       showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene.', 'error');
@@ -850,37 +717,9 @@ btnSaveNick.onclick = async () => {
   }
 };
 
-document.getElementById('btn-continue').onclick = async () => {
-  const user = auth.currentUser;
-  const btn = document.getElementById('btn-continue');
-  btn.disabled = true;
-  try {
-    if (user){
-      const photoURL = await uploadEditAvatar();
-      if (photoURL){
-        await setDoc(doc(db, 'users', user.uid), { photoURL }, { merge: true });
-      }
-    }
-  } catch(avatarErr){
-    console.warn('Avatar upload failed before continue:', avatarErr);
-    // still let them continue even if the avatar upload failed
-  }
+document.getElementById('btn-continue').onclick = () => {
   location.href = getNextUrl();
 };
-
-// Load and show any existing avatar in the "edit later" view.
-async function loadAvatarPreview(uid, imgEl){
-  try {
-    const snap = await getDoc(doc(db, 'users', uid));
-    const url = snap.exists() ? snap.data().photoURL : null;
-    if (url){
-      imgEl.src = url;
-      imgEl.classList.remove('hidden');
-    }
-  } catch(e){
-    console.warn('Could not load existing avatar:', e);
-  }
-}
 
 document.getElementById('btn-signout').onclick = async () => {
   try {
@@ -940,7 +779,6 @@ async function enterSignedInFlow(user){
       document.getElementById('signed-in-name').textContent = nickname;
       nickSetup.classList.add('hidden');
       continueBox.classList.remove('hidden');
-      await loadAvatarPreview(user.uid, document.getElementById('avatar-preview-edit'));
     } else {
       document.getElementById('signed-in-name').textContent = user.email;
       nickInput.value = '';

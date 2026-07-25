@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giriş Yap — Süt Kutusu Oyunu</title>
+<style>
+  :root{
+    --bg:#0a0a10;
+    --panel:#121218;
+    --panel-2:#16161e;
+    --line:#242430;
+    --text:#e8e8ec;
+    --text-dim:#8a8a97;
+    --text-faint:#5c5c68;
+    --grad-a:#22d3ee;
+    --grad-b:#6d5bf5;
+    --grad-c:#c084fc;
+    --danger:#f0554f;
+    --ok:#84cc16;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+    line-height:1.55;
+    position:relative;
+    overflow-x:hidden;
+  }
+  #stars{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .wrap{max-width:420px;margin:0 auto;padding:56px 20px 90px;position:relative;z-index:1;}
+  .back{
+    font-size:13px; text-decoration:none; color:var(--text-dim);
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .back:hover{color:var(--text);}
+
+  header.hero{margin:34px 0 30px;}
+  h1.grad{
+    font-size:clamp(28px,6vw,38px);
+    font-weight:800;
+    margin:0 0 8px;
+    letter-spacing:.2px;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b) 55%, var(--grad-c));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .eyebrow{
+    margin:0;
+    font-size:12px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+  }
+  .hero-divider{
+    height:1px;
+    margin:26px 0 0;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b), var(--grad-c), transparent);
+    opacity:.5;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+    margin-bottom:18px;
+  }
+  .panel h2{
+    margin:0 0 16px;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    font-weight:700;
+  }
+
+  input[type=text], input[type=email], input[type=password]{
+    width:100%;
+    font-family:inherit;
+    font-size:14px;
+    padding:11px 13px;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:var(--panel-2);
+    color:var(--text);
+  }
+  input::placeholder{color:var(--text-faint);}
+  input:focus{ outline:none; border-color:var(--grad-b); }
+  label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);display:block;margin-bottom:6px;}
+  .field{margin-bottom:14px;}
+  .field-status{font-size:12px;margin-top:6px;min-height:16px;}
+  .field-status.ok{color:var(--ok);}
+  .field-status.error{color:#f0a8a4;}
+  .field-status.pending{color:var(--text-faint);}
+
+  button{
+    font-family:inherit;
+    font-weight:600;
+    font-size:13.5px;
+    padding:11px 18px;
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    color:#08080c;
+    border:none;
+    border-radius:9px;
+    cursor:pointer;
+    transition:opacity .15s, transform .1s;
+    width:100%;
+  }
+  button:hover{opacity:.88;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.ghost{
+    background:transparent;
+    color:var(--text-dim);
+    border:1px solid var(--line);
+  }
+  button.ghost:hover{color:var(--text); border-color:var(--text-faint); opacity:1;}
+
+  button.google{
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+  }
+  button.google:hover{border-color:var(--grad-b); opacity:1;}
+  button.google svg{flex-shrink:0;}
+
+  .divider{
+    display:flex; align-items:center; gap:12px;
+    margin:18px 0; color:var(--text-faint); font-size:12px;
+    text-transform:uppercase; letter-spacing:.1em;
+  }
+  .divider::before, .divider::after{
+    content:''; flex:1; height:1px; background:var(--line);
+  }
+
+  .mode-switch{
+    display:flex; gap:8px; margin-bottom:18px;
+    border:1px solid var(--line); border-radius:9px; padding:3px;
+    background:var(--panel-2);
+  }
+  .mode-switch button{
+    flex:1; background:transparent; color:var(--text-dim);
+    border-radius:6px; padding:8px; font-size:13px;
+  }
+  .mode-switch button.active{
+    background:linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    color:#08080c;
+  }
+
+  #msg{
+    font-size:13px; padding:10px 13px; border-radius:9px; margin-bottom:14px;
+    display:none;
+  }
+  #msg.show{display:block;}
+  #msg.error{ background:rgba(240,85,79,.12); border:1px solid rgba(240,85,79,.4); color:#f0a8a4; }
+  #msg.ok{ background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.4); color:#c3e88d; }
+
+  .hidden{display:none !important;}
+  .avatar-preview{
+    display:block;
+    width:72px; height:72px;
+    border-radius:50%;
+    object-fit:cover;
+    border:1px solid var(--line);
+    margin-bottom:10px;
+    background:var(--panel-2);
+  }
+  input[type=file]{
+    width:100%;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .nick-note{font-size:12px;color:var(--text-faint);margin-top:-6px;margin-bottom:14px;}
+  .signed-in-box{text-align:center;}
+  .signed-in-box .nick-badge{
+    font-weight:700; font-size:16px;
+    background:linear-gradient(90deg, #f43f3f, #f59e0b, #84cc16);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  footer{text-align:center;font-size:12px;color:var(--text-faint);margin-top:44px;}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="wrap">
+  <a class="back" href="https://sutkutusuoyunu.github.io/">← Geri</a>
+
+  <header class="hero">
+    <h1 class="grad">Giriş Yap</h1>
+    <p class="eyebrow">Süt Kutusu Oyunu Forumu</p>
+    <div class="hero-divider"></div>
+  </header>
+
+  <div id="msg"></div>
+
+  <!-- Shown once signed in -->
+  <div class="panel hidden" id="panel-signed-in">
+    <div class="signed-in-box">
+      <p style="margin:0 0 4px;color:var(--text-dim);font-size:13px;">Giriş yapıldı</p>
+      <p class="nick-badge" id="signed-in-name"></p>
+
+      <!-- Email verification gate -->
+      <div id="verify-gate" class="hidden" style="text-align:left;margin-top:18px;">
+        <p style="font-size:13px;color:var(--text-dim);">
+          Devam etmeden önce e-postanı doğrulaman gerekiyor. Sana bir doğrulama bağlantısı gönderdik:
+          <strong id="verify-email-addr"></strong>
+        </p>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button id="btn-resend-verify" class="ghost">Tekrar Gönder</button>
+          <button id="btn-check-verify">Doğruladım, Kontrol Et</button>
+        </div>
+      </div>
+
+      <div id="nick-setup" class="hidden" style="text-align:left;margin-top:18px;">
+        <div class="field">
+          <label for="nick-input">Forumda görünecek takma ad</label>
+          <input type="text" id="nick-input" maxlength="24" placeholder="Örn: KutuKahini">
+          <div class="field-status" id="nick-status"></div>
+        </div>
+        <div class="field">
+          <label for="avatar-input-setup">Profil fotoğrafı (opsiyonel)</label>
+          <img id="avatar-preview-setup" class="avatar-preview hidden" alt="">
+          <input type="file" id="avatar-input-setup" accept="image/*">
+          <div class="field-status" id="avatar-status-setup"></div>
+        </div>
+        <button id="btn-save-nick" disabled>Takma Adı Kaydet ve Devam Et</button>
+      </div>
+      <div id="continue-box" class="hidden" style="margin-top:18px;">
+        <div class="field" style="text-align:left;">
+          <label for="avatar-input-edit">Profil fotoğrafı</label>
+          <img id="avatar-preview-edit" class="avatar-preview hidden" alt="">
+          <input type="file" id="avatar-input-edit" accept="image/*">
+          <div class="field-status" id="avatar-status-edit"></div>
+        </div>
+        <button id="btn-continue">Foruma Dön</button>
+        <div style="margin-top:10px;">
+          <button class="ghost" id="btn-signout">Çıkış Yap</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shown when signed out -->
+  <div id="panel-signed-out">
+    <div class="panel">
+      <button class="google" id="btn-google">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.9v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.9A9 9 0 0 0 0 9c0 1.45.35 2.83.9 4.03l3.05-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .9 4.97l3.05 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+        Google ile Giriş Yap
+      </button>
+    </div>
+
+    <div class="divider">veya e-posta ile</div>
+
+    <div class="panel">
+      <div class="mode-switch">
+        <button class="active" id="mode-login">Giriş Yap</button>
+        <button id="mode-signup">Kayıt Ol</button>
+      </div>
+
+      <div class="field">
+        <label for="email-input">E-posta</label>
+        <input type="email" id="email-input" placeholder="ornek@eposta.com">
+      </div>
+      <div class="field">
+        <label for="password-input">Şifre</label>
+        <input type="password" id="password-input" placeholder="En az 6 karakter">
+      </div>
+      <div class="field hidden" id="signup-nick-field">
+        <label for="signup-nick-input">Takma ad</label>
+        <input type="text" id="signup-nick-input" maxlength="24" placeholder="Forumda görünecek isim">
+        <div class="field-status" id="signup-nick-status"></div>
+      </div>
+
+      <button id="btn-email-submit">Giriş Yap</button>
+      <p class="nick-note" id="forgot-note" style="margin-top:12px;">
+        <button class="small-link" id="btn-forgot" style="background:none;border:none;color:var(--text-faint);text-decoration:underline;cursor:pointer;padding:0;font-size:12px;">Şifreni mi unuttun?</button>
+      </p>
+    </div>
+  </div>
+
+  <footer>Süt Kutusu Oyunu Forumu · veriler Firebase üzerinde tutulur</footer>
+</div>
+
+<script>
+(function(){
+  const c = document.getElementById('stars');
+  const ctx = c.getContext('2d');
+  function resize(){ c.width = innerWidth; c.height = document.body.scrollHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+  const stars = Array.from({length:120}, () => ({
+    x: Math.random()*c.width, y: Math.random()*c.height,
+    r: Math.random()*1.4+0.3, o: Math.random()*0.6+0.2
+  }));
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    for (const s of stars){
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${s.o})`;
+      ctx.fill();
+    }
+  }
+  draw();
+  setInterval(()=>{ resize(); draw(); }, 4000);
+})();
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signOut,
+  GoogleAuthProvider, signInWithPopup,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendPasswordResetEmail, setPersistence, browserSessionPersistence,
+  sendEmailVerification, reload
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc,
+  runTransaction
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ========================================================= 
+// FIREBASE CONFIG
+// ========================================================= 
+const firebaseConfig = {
+  apiKey: "AIzaSyBafL4x-ANrbA8x9iPjIXvT57d6H0oJnuo",
+  authDomain: "sutkutusuoyunu.firebaseapp.com",
+  projectId: "sutkutusuoyunu",
+  storageBucket: "sutkutusuoyunu.appspot.com",
+  messagingSenderId: "432642434528",
+  appId: "1:432642434528:web:01701181fb552769cef785"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ---------- avatar upload (2KB - 2MB) via Cloudinary unsigned upload ----------
+// Cloudinary free tier, no backend needed. The size window is enforced
+// client-side only here — Cloudinary's unsigned upload API doesn't offer
+// per-request byte-range enforcement the way Firebase Storage rules did,
+// so this bound is a UX guard, not a hard security boundary. Since this is
+// just a public forum avatar (not sensitive data), that's an acceptable
+// trade-off for skipping a paid backend.
+const CLOUDINARY_CLOUD_NAME = 'sa2ybt90';
+const CLOUDINARY_UPLOAD_PRESET = 'avatars';
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+const AVATAR_MIN_BYTES = 2 * 1024;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function formatBytes(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/(1024*1024)).toFixed(2) + ' MB';
+}
+
+// Wires a <input type=file> + status element + optional <img> preview.
+// Returns a function that uploads the currently-selected file (if valid)
+// and resolves to the uploaded URL, or null if nothing selected.
+function wireAvatarInput(inputEl, statusEl, previewEl, getUid){
+  let selectedFile = null;
+
+  inputEl.addEventListener('change', () => {
+    selectedFile = null;
+    if (previewEl) previewEl.classList.add('hidden');
+    statusEl.textContent = '';
+    statusEl.className = 'field-status';
+
+    const file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')){
+      statusEl.textContent = 'Sadece resim dosyaları kabul edilir.';
+      statusEl.className = 'field-status error';
+      inputEl.value = '';
+      return;
+    }
+    if (file.size < AVATAR_MIN_BYTES){
+      statusEl.textContent = `Dosya çok küçük (${formatBytes(file.size)}). En az 2 KB olmalı.`;
+      statusEl.className = 'field-status error';
+      inputEl.value = '';
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES){
+      statusEl.textContent = `Dosya çok büyük (${formatBytes(file.size)}). En fazla 2 MB olmalı.`;
+      statusEl.className = 'field-status error';
+      inputEl.value = '';
+      return;
+    }
+
+    selectedFile = file;
+    statusEl.textContent = `Seçildi: ${formatBytes(file.size)} ✓`;
+    statusEl.className = 'field-status ok';
+    if (previewEl){
+      previewEl.src = URL.createObjectURL(file);
+      previewEl.classList.remove('hidden');
+    }
+  });
+
+  return async function uploadIfSelected(){
+    if (!selectedFile) return null;
+    const uid = getUid();
+    if (!uid) return null;
+    statusEl.textContent = 'Yükleniyor…';
+    statusEl.className = 'field-status pending';
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      // unique per-upload public_id (uid + timestamp) so the preset's
+      // overwrite:false / unique_filename:false settings never collide
+      // with a previous upload from the same or another user
+      formData.append('public_id', `${uid}_${Date.now()}`);
+
+      const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok){
+        throw new Error(data.error && data.error.message ? data.error.message : 'Yükleme başarısız.');
+      }
+      statusEl.textContent = 'Yüklendi ✓';
+      statusEl.className = 'field-status ok';
+      selectedFile = null; // don't re-upload on next call
+      return data.secure_url;
+    } catch(e){
+      console.error('Avatar upload error:', e);
+      statusEl.textContent = 'Fotoğraf yüklenemedi: ' + e.message;
+      statusEl.className = 'field-status error';
+      throw e;
+    }
+  };
+}
+
+setPersistence(auth, browserSessionPersistence)
+  .catch(e => console.warn('Persistence error:', e));
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('profile');
+googleProvider.addScope('email');
+
+const FORUM_URL = 'https://sutkutusuoyunu.github.io/documentation/';
+
+// ---------- reserved nickname protection (support account) ----------
+// The exact string "artful617" is enforced server-side too (see
+// firestore.rules — nicknames/artful617 can only ever be created/updated
+// by artful617@gmail.com). Everything here is a client-side courtesy layer
+// that also catches common lookalikes/impersonation attempts BEFORE they
+// even reach Firestore, so people get a clear "reserved" message instead
+// of a generic permission error, and so near-miss impostor names
+// (e.g. "artfu1617", "art_ful617") are blocked too — those aren't covered
+// by the server rule since it only matches the exact doc ID.
+const RESERVED_SUPPORT_EMAIL = 'artful617@gmail.com';
+const RESERVED_NICK_CANONICAL = 'artful617';
+
+// Collapse common lookalike substitutions so visually-similar strings
+// normalize to the same value before comparing/measuring distance.
+function foldLookalikes(s){
+  return s
+    .toLowerCase()
+    .replace(/[0]/g, 'o')
+    .replace(/[1lI!|]/g, 'i')
+    .replace(/[3]/g, 'e')
+    .replace(/[4]/g, 'a')
+    .replace(/[5$]/g, 's')
+    .replace(/[7]/g, 't')
+    .replace(/[@]/g, 'a')
+    .replace(/[_\-.\s]/g, ''); // strip separators entirely
+}
+
+// Small Levenshtein distance implementation, no dependency needed.
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i=0;i<=m;i++) dp[i][0] = i;
+  for (let j=0;j<=n;j++) dp[0][j] = j;
+  for (let i=1;i<=m;i++){
+    for (let j=1;j<=n;j++){
+      const cost = a[i-1] === b[j-1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i-1][j] + 1,
+        dp[i][j-1] + 1,
+        dp[i-1][j-1] + cost
+      );
+    }
+  }
+  return dp[m][n];
+}
+
+// Returns true if `nick` is the reserved name or a close lookalike of it.
+function isReservedNickAttempt(rawNick){
+  const folded = foldLookalikes(rawNick.trim());
+  const canonicalFolded = foldLookalikes(RESERVED_NICK_CANONICAL);
+  if (folded === canonicalFolded) return true;
+  // catch small edits around the folded form (extra/missing/swapped char)
+  // canonical folded length is short, so distance <=1 is a tight, safe bound
+  if (Math.abs(folded.length - canonicalFolded.length) <= 2 &&
+      levenshtein(folded, canonicalFolded) <= 1){
+    return true;
+  }
+  return false;
+}
+
+function isSupportAccount(user){
+  return !!user && user.email === RESERVED_SUPPORT_EMAIL;
+}
+
+// ---------- helpers ----------
+function getNextUrl(){
+  const params = new URLSearchParams(location.search);
+  const next = params.get('next');
+  if (next && next.startsWith(location.origin)) return next;
+  return FORUM_URL;
+}
+
+const msgEl = document.getElementById('msg');
+function showMsg(text, kind){
+  msgEl.textContent = text;
+  msgEl.className = 'show ' + (kind || '');
+}
+function clearMsg(){
+  msgEl.className = '';
+  msgEl.textContent = '';
+}
+
+function friendlyError(code){
+  const map = {
+    'auth/invalid-email': 'Geçersiz e-posta adresi.',
+    'auth/user-not-found': 'Bu e-posta ile kayıtlı bir hesap yok.',
+    'auth/wrong-password': 'Şifre yanlış.',
+    'auth/invalid-credential': 'E-posta veya şifre hatalı.',
+    'auth/email-already-in-use': 'Bu e-posta zaten kayıtlı. Giriş yapmayı dene.',
+    'auth/weak-password': 'Şifre en az 6 karakter olmalı.',
+    'auth/popup-closed-by-user': 'Google giriş penceresi kapatıldı.',
+    'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.',
+    'auth/operation-not-allowed': 'Bu kimlik doğrulama yöntemi Firebase\'de aktif değil. Admin panelinden etkinleştir.',
+    'auth/network-request-failed': 'Ağ bağlantı hatası. Lütfen tekrar dene.',
+    'auth/configuration-not-found': 'Firebase yapılandırması bulunamadı. Sayfayı yenile.',
+    'auth/unauthorized-domain': 'Bu alan adı Firebase\'de yetkilendirilmemiş.'
+  };
+  return map[code] || 'Hata: ' + code;
+}
+
+// ---------- nickname helpers (uniqueness enforced via /nicknames/{lowercased}) ----------
+function normalizeNick(nick){
+  return nick.trim().toLowerCase();
+}
+function validNickFormat(nick){
+  // 3-24 chars, letters/numbers/underscore/space/turkish chars - adjust as you like
+  return /^[a-z0-9_ğüşıöç\s]{3,24}$/i.test(nick);
+}
+
+async function getNickname(uid){
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return snap.exists() ? snap.data().nickname : null;
+  } catch(e) { 
+    console.warn('getNickname error:', e);
+    return null; 
+  }
+}
+
+// Atomically reserve a nickname. Throws if taken, reserved, or invalid.
+// Also releases the user's previous nickname reservation, if any.
+async function claimNickname(uid, rawNick, userEmail){
+  const nick = rawNick.trim();
+  if (!validNickFormat(nick)) {
+    throw new Error('INVALID_FORMAT');
+  }
+  // block the reserved support name / lookalikes for everyone except
+  // the actual support account
+  if (isReservedNickAttempt(nick) && userEmail !== RESERVED_SUPPORT_EMAIL){
+    throw new Error('RESERVED');
+  }
+  const key = normalizeNick(nick);
+  const nickRef = doc(db, 'nicknames', key);
+  const userRef = doc(db, 'users', uid);
+
+  await runTransaction(db, async (tx) => {
+    const nickSnap = await tx.get(nickRef);
+    if (nickSnap.exists() && nickSnap.data().uid !== uid) {
+      throw new Error('TAKEN');
+    }
+    const userSnap = await tx.get(userRef);
+    const prevNick = userSnap.exists() ? userSnap.data().nickname : null;
+
+    // release old reservation if changing nickname
+    if (prevNick && normalizeNick(prevNick) !== key) {
+      const prevRef = doc(db, 'nicknames', normalizeNick(prevNick));
+      tx.delete(prevRef);
+    }
+
+    tx.set(nickRef, { uid, nickname: nick });
+    tx.set(userRef, { nickname: nick }, { merge: true });
+  });
+}
+
+// live-check as the user types (best-effort, not the source of truth — the
+// transaction below is what actually enforces uniqueness).
+// Returns a state object so callers can read the latest known availability.
+let nickCheckTimer = null;
+function wireNickLiveCheck(inputEl, statusEl, selfUid, onStateChange, getUserEmail){
+  const state = { available: false, checking: false };
+  inputEl.addEventListener('input', () => {
+    clearTimeout(nickCheckTimer);
+    const val = inputEl.value.trim();
+    state.available = false;
+    if (!val){ statusEl.textContent = ''; statusEl.className = 'field-status'; onStateChange && onStateChange(state); return; }
+    if (!validNickFormat(val)){
+      statusEl.textContent = '3-24 karakter, harf/rakam/altçizgi.';
+      statusEl.className = 'field-status error';
+      onStateChange && onStateChange(state);
+      return;
+    }
+    const userEmail = getUserEmail ? getUserEmail() : null;
+    if (isReservedNickAttempt(val) && userEmail !== RESERVED_SUPPORT_EMAIL){
+      statusEl.textContent = 'Bu isim rezerve edilmiş.';
+      statusEl.className = 'field-status error';
+      onStateChange && onStateChange(state);
+      return;
+    }
+    statusEl.textContent = 'Kontrol ediliyor…';
+    statusEl.className = 'field-status pending';
+    state.checking = true;
+    onStateChange && onStateChange(state);
+    nickCheckTimer = setTimeout(async () => {
+      try {
+        const snap = await getDoc(doc(db, 'nicknames', normalizeNick(val)));
+        const taken = snap.exists() && (!selfUid || snap.data().uid !== selfUid);
+        state.checking = false;
+        if (taken){
+          state.available = false;
+          statusEl.textContent = 'Bu takma ad zaten alınmış.';
+          statusEl.className = 'field-status error';
+        } else {
+          state.available = true;
+          statusEl.textContent = 'Kullanılabilir ✓';
+          statusEl.className = 'field-status ok';
+        }
+      } catch(e){
+        state.checking = false;
+        state.available = false;
+        statusEl.textContent = '';
+      }
+      onStateChange && onStateChange(state);
+    }, 400);
+  });
+  return state;
+}
+
+// ---------- mode switch (login vs signup) ----------
+let mode = 'login';
+const modeLoginBtn = document.getElementById('mode-login');
+const modeSignupBtn = document.getElementById('mode-signup');
+const submitBtn = document.getElementById('btn-email-submit');
+const signupNickField = document.getElementById('signup-nick-field');
+const signupNickInput = document.getElementById('signup-nick-input');
+const signupNickStatus = document.getElementById('signup-nick-status');
+const forgotNote = document.getElementById('forgot-note');
+
+// at signup time there's no user yet, so the reserved-name exemption never
+// applies here — nobody can sign up claiming to already be support
+const signupNickState = wireNickLiveCheck(signupNickInput, signupNickStatus, null, null, () => null);
+
+function setMode(m){
+  mode = m;
+  modeLoginBtn.classList.toggle('active', m === 'login');
+  modeSignupBtn.classList.toggle('active', m === 'signup');
+  submitBtn.textContent = m === 'login' ? 'Giriş Yap' : 'Hesap Oluştur';
+  signupNickField.classList.toggle('hidden', m !== 'signup');
+  forgotNote.classList.toggle('hidden', m !== 'login');
+  clearMsg();
+}
+modeLoginBtn.onclick = () => setMode('login');
+modeSignupBtn.onclick = () => setMode('signup');
+
+// ---------- Google sign-in ----------
+document.getElementById('btn-google').onclick = async () => {
+  clearMsg();
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    console.log('Google sign-in success:', result.user.email);
+    // onAuthStateChanged handles the rest
+  } catch(e){
+    console.error('Google sign-in error:', e.code, e.message);
+    showMsg(friendlyError(e.code), 'error');
+  }
+};
+
+// ---------- Email/password sign-in or sign-up ----------
+submitBtn.onclick = async () => {
+  clearMsg();
+  const email = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('password-input').value;
+  
+  if (!email || !password){
+    showMsg('E-posta ve şifre gerekli.', 'error');
+    return;
+  }
+  
+  submitBtn.disabled = true;
+  
+  try {
+    if (mode === 'signup'){
+      const nickname = signupNickInput.value.trim();
+      if (!nickname){
+        showMsg('Lütfen bir takma ad gir.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (!validNickFormat(nickname)){
+        showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      // nobody can sign up claiming the reserved name / a lookalike of it
+      if (isReservedNickAttempt(nickname)){
+        showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (signupNickState.checking){
+        showMsg('Takma ad kontrol ediliyor, birkaç saniye bekle ve tekrar dene.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (!signupNickState.available){
+        showMsg('Bu takma ad zaten alınmış olabilir. Farklı bir tane dene.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      try {
+        await claimNickname(cred.user.uid, nickname, cred.user.email);
+      } catch(nickErr){
+        if (nickErr.message === 'TAKEN'){
+          showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene ve tekrar giriş yap.', 'error');
+        } else if (nickErr.message === 'RESERVED'){
+          showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
+        } else {
+          showMsg('Takma ad kaydedilemedi: ' + nickErr.message, 'error');
+        }
+        submitBtn.disabled = false;
+        return;
+      }
+      await sendEmailVerification(cred.user);
+      console.log('Signup success, verification sent:', cred.user.email);
+    } else {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login success:', cred.user.email);
+    }
+  } catch(e){
+    console.error('Auth error:', e.code, e.message);
+    showMsg(friendlyError(e.code), 'error');
+  } finally {
+    submitBtn.disabled = false;
+  }
+};
+
+document.getElementById('btn-forgot').onclick = async () => {
+  clearMsg();
+  const email = document.getElementById('email-input').value.trim();
+  if (!email){
+    showMsg('Şifre sıfırlamak için önce e-posta adresini yaz.', 'error');
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    showMsg('Şifre sıfırlama bağlantısı e-postana gönderildi.', 'ok');
+  } catch(e){
+    console.error('Password reset error:', e.code, e.message);
+    showMsg(friendlyError(e.code), 'error');
+  }
+};
+
+// ---------- Signed-in view ----------
+const panelSignedIn = document.getElementById('panel-signed-in');
+const panelSignedOut = document.getElementById('panel-signed-out');
+const verifyGate = document.getElementById('verify-gate');
+const nickSetup = document.getElementById('nick-setup');
+const continueBox = document.getElementById('continue-box');
+const nickInput = document.getElementById('nick-input');
+const nickStatus = document.getElementById('nick-status');
+const btnSaveNick = document.getElementById('btn-save-nick');
+
+const uploadSetupAvatar = wireAvatarInput(
+  document.getElementById('avatar-input-setup'),
+  document.getElementById('avatar-status-setup'),
+  document.getElementById('avatar-preview-setup'),
+  () => (auth.currentUser ? auth.currentUser.uid : null)
+);
+const uploadEditAvatar = wireAvatarInput(
+  document.getElementById('avatar-input-edit'),
+  document.getElementById('avatar-status-edit'),
+  document.getElementById('avatar-preview-edit'),
+  () => (auth.currentUser ? auth.currentUser.uid : null)
+);
+
+const nickState = wireNickLiveCheck(
+  nickInput, nickStatus, null,
+  (state) => {
+    btnSaveNick.disabled = !(validNickFormat(nickInput.value.trim()) && state.available && !state.checking);
+  },
+  () => (auth.currentUser ? auth.currentUser.email : null)
+);
+nickInput.addEventListener('input', () => {
+  // disable immediately while re-checking; wireNickLiveCheck's callback
+  // will re-enable once the availability check for the new value resolves
+  btnSaveNick.disabled = true;
+});
+
+btnSaveNick.onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  const nickname = nickInput.value.trim();
+  if (!nickname){ 
+    showMsg('Lütfen bir takma ad gir.', 'error'); 
+    return; 
+  }
+  if (!validNickFormat(nickname)){
+    showMsg('Takma ad 3-24 karakter olmalı ve sadece harf/rakam/altçizgi içermeli.', 'error');
+    return;
+  }
+  if (isReservedNickAttempt(nickname) && !isSupportAccount(user)){
+    showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
+    return;
+  }
+  btnSaveNick.disabled = true;
+  try {
+    await claimNickname(user.uid, nickname, user.email);
+    try {
+      const photoURL = await uploadSetupAvatar();
+      if (photoURL){
+        await setDoc(doc(db, 'users', user.uid), { photoURL }, { merge: true });
+      }
+    } catch(avatarErr){
+      // nickname already saved successfully; don't block continuing just
+      // because the optional avatar upload failed — the status text next
+      // to the file input already explains what went wrong
+      console.warn('Avatar upload failed during setup:', avatarErr);
+    }
+    document.getElementById('signed-in-name').textContent = nickname;
+    nickSetup.classList.add('hidden');
+    continueBox.classList.remove('hidden');
+    await loadAvatarPreview(user.uid, document.getElementById('avatar-preview-edit'));
+  } catch(e) {
+    if (e.message === 'TAKEN'){
+      showMsg('Bu takma ad zaten alınmış. Farklı bir tane dene.', 'error');
+    } else if (e.message === 'RESERVED'){
+      showMsg('Bu isim rezerve edilmiş, farklı bir takma ad seç.', 'error');
+    } else {
+      showMsg('Takma ad kaydedilemedi: ' + e.message, 'error');
+    }
+    btnSaveNick.disabled = false;
+  }
+};
+
+document.getElementById('btn-continue').onclick = async () => {
+  const user = auth.currentUser;
+  const btn = document.getElementById('btn-continue');
+  btn.disabled = true;
+  try {
+    if (user){
+      const photoURL = await uploadEditAvatar();
+      if (photoURL){
+        await setDoc(doc(db, 'users', user.uid), { photoURL }, { merge: true });
+      }
+    }
+  } catch(avatarErr){
+    console.warn('Avatar upload failed before continue:', avatarErr);
+    // still let them continue even if the avatar upload failed
+  }
+  location.href = getNextUrl();
+};
+
+// Load and show any existing avatar in the "edit later" view.
+async function loadAvatarPreview(uid, imgEl){
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    const url = snap.exists() ? snap.data().photoURL : null;
+    if (url){
+      imgEl.src = url;
+      imgEl.classList.remove('hidden');
+    }
+  } catch(e){
+    console.warn('Could not load existing avatar:', e);
+  }
+}
+
+document.getElementById('btn-signout').onclick = async () => {
+  try {
+    await signOut(auth);
+  } catch(e) {
+    console.error('Signout error:', e);
+  }
+};
+
+document.getElementById('btn-resend-verify').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await sendEmailVerification(user);
+    showMsg('Doğrulama bağlantısı tekrar gönderildi.', 'ok');
+  } catch(e){
+    showMsg(friendlyError(e.code) || e.message, 'error');
+  }
+};
+
+document.getElementById('btn-check-verify').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await reload(user);
+    if (user.emailVerified){
+      clearMsg();
+      await enterSignedInFlow(user);
+    } else {
+      showMsg('Henüz doğrulanmamış görünüyor. E-postandaki bağlantıya tıklayıp tekrar dene.', 'error');
+    }
+  } catch(e){
+    showMsg(friendlyError(e.code) || e.message, 'error');
+  }
+};
+
+// ---------- shared signed-in routing ----------
+async function enterSignedInFlow(user){
+  panelSignedOut.classList.add('hidden');
+  panelSignedIn.classList.remove('hidden');
+
+  // Email/password accounts must verify their email before continuing.
+  // Google accounts come pre-verified.
+  if (!user.emailVerified){
+    document.getElementById('signed-in-name').textContent = user.email;
+    document.getElementById('verify-email-addr').textContent = user.email;
+    verifyGate.classList.remove('hidden');
+    nickSetup.classList.add('hidden');
+    continueBox.classList.add('hidden');
+    return;
+  }
+  verifyGate.classList.add('hidden');
+
+  try {
+    const nickname = await getNickname(user.uid);
+    if (nickname){
+      document.getElementById('signed-in-name').textContent = nickname;
+      nickSetup.classList.add('hidden');
+      continueBox.classList.remove('hidden');
+      await loadAvatarPreview(user.uid, document.getElementById('avatar-preview-edit'));
+    } else {
+      document.getElementById('signed-in-name').textContent = user.email;
+      nickInput.value = '';
+      nickStatus.textContent = '';
+      btnSaveNick.disabled = true;
+      nickSetup.classList.remove('hidden');
+      continueBox.classList.add('hidden');
+    }
+  } catch(e) {
+    console.error('Error loading user data:', e);
+    document.getElementById('signed-in-name').textContent = user.email;
+    nickSetup.classList.remove('hidden');
+    continueBox.classList.add('hidden');
+  }
+}
+
+// Monitor auth state
+onAuthStateChanged(auth, async (user) => {
+  console.log('Auth state changed:', user ? user.email : 'logged out');
+  
+  if (!user){
+    panelSignedIn.classList.add('hidden');
+    panelSignedOut.classList.remove('hidden');
+    return;
+  }
+  
+  clearMsg();
+  await enterSignedInFlow(user);
+});
+
+console.log('Login page loaded. Firebase configured for project:', firebaseConfig.projectId);
+</script>
+</body>
+</html>
